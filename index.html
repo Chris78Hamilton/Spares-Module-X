@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Capital & Critical Spares – Mining Site Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0c10;font-family:'IBM Plex Sans','Segoe UI',sans-serif;color:#dde3ee}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:#111318}
+    ::-webkit-scrollbar-thumb{background:#1e2433;border-radius:3px}
+    select option{background:#141720;color:#dde3ee}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .fade-in{animation:fadeIn 0.2s ease forwards}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+    .pulse{animation:pulse 2s infinite}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+const C = {
+  bg:       "#0a0c10",
+  surface:  "#0f1218",
+  card:     "#141820",
+  border:   "#1e2433",
+  accent:   "#e8a020",   // amber-gold
+  accentLo: "#3d2a08",
+  cyan:     "#22d3ee",
+  green:    "#10b981",
+  red:      "#f43f5e",
+  orange:   "#f97316",
+  blue:     "#3b82f6",
+  purple:   "#8b5cf6",
+  text:     "#dde3ee",
+  muted:    "#4a5568",
+  light:    "#8896a8",
+};
+
+// ── Seed Data ──────────────────────────────────────────────────────────────
+const SEED_SPARES = [
+  // Capital Spares
+  { id:"SP-001", partNo:"CS-CRSH-001",  description:"Jaw Crusher Main Bearing Assembly",      category:"Capital",   type:"Rotating",     equipTag:"CRSH-101", manufacturer:"Metso",      supplier:"Mining Parts Co",   unitCost:42500, qty:1, minQty:1, location:"WHB-01-R03",  condition:"New",    leadTime:16, criticality:"Critical", status:"Available",   lastAudit:"2025-01-10", notes:"Long lead item – order 16 weeks in advance" },
+  { id:"SP-002", partNo:"CS-MILL-001",  description:"SAG Mill Pinion Gear Set",               category:"Capital",   type:"Gearbox",      equipTag:"MILL-701", manufacturer:"FLSmidth",   supplier:"OEM Direct",        unitCost:185000,qty:1, minQty:1, location:"WHB-01-R01",  condition:"New",    leadTime:24, criticality:"Critical", status:"Available",   lastAudit:"2025-01-08", notes:"Store horizontally, grease coated" },
+  { id:"SP-003", partNo:"CS-TRSF-001", description:"11kV Power Transformer (Standby)",        category:"Capital",   type:"Electrical",   equipTag:"TRSF-501", manufacturer:"ABB",        supplier:"ABB Direct",        unitCost:320000,qty:1, minQty:1, location:"EYD-01",      condition:"New",    leadTime:32, criticality:"Critical", status:"Available",   lastAudit:"2024-12-15", notes:"Oil filled – stored upright, vent closed" },
+  { id:"SP-004", partNo:"CS-PUMP-001", description:"Slurry Pump Casing & Impeller (Spare)",   category:"Capital",   type:"Pump",         equipTag:"PUMP-305", manufacturer:"Warman",     supplier:"Weir Minerals",     unitCost:28000, qty:2, minQty:1, location:"WHB-02-R04",  condition:"New",    leadTime:12, criticality:"Critical", status:"Available",   lastAudit:"2025-01-20", notes:"Paired sets – do not split" },
+  { id:"SP-005", partNo:"CS-CONV-001", description:"Conveyor Head Drive Gearbox",              category:"Capital",   type:"Gearbox",      equipTag:"CONV-202", manufacturer:"SEW",        supplier:"SEW Eurodrive",     unitCost:56000, qty:1, minQty:1, location:"WHB-01-R02",  condition:"New",    leadTime:18, criticality:"High",     status:"Available",   lastAudit:"2025-01-15", notes:"Filled with preservative oil" },
+
+  // Critical Spares
+  { id:"SP-006", partNo:"CR-CRSH-002", description:"Toggle Plate – Jaw Crusher",               category:"Critical",  type:"Wear Part",    equipTag:"CRSH-101", manufacturer:"Metso",      supplier:"Mining Parts Co",   unitCost:4800,  qty:3, minQty:2, location:"WHB-03-R01",  condition:"New",    leadTime:6,  criticality:"Critical", status:"Available",   lastAudit:"2025-01-22", notes:"" },
+  { id:"SP-007", partNo:"CR-PUMP-002", description:"Mechanical Seal Kit – Slurry Pump",        category:"Critical",  type:"Seal/Gasket",  equipTag:"PUMP-305", manufacturer:"Warman",     supplier:"Weir Minerals",     unitCost:1200,  qty:4, minQty:3, location:"WHB-03-R02",  condition:"New",    leadTime:4,  criticality:"Critical", status:"Available",   lastAudit:"2025-01-18", notes:"Keep dry – moisture sensitive" },
+  { id:"SP-008", partNo:"CR-MILL-002", description:"SAG Mill Liner Bolt Set (x50)",            category:"Critical",  type:"Fastener",     equipTag:"MILL-701", manufacturer:"Sandvik",    supplier:"Sandvik Mining",    unitCost:3200,  qty:2, minQty:2, location:"WHB-03-R03",  condition:"New",    leadTime:8,  criticality:"Critical", status:"Available",   lastAudit:"2025-01-05", notes:"" },
+  { id:"SP-009", partNo:"CR-MCC-001",  description:"MCC Breaker 630A ACB",                    category:"Critical",  type:"Electrical",   equipTag:"MCC-601",  manufacturer:"Siemens",    supplier:"Siemens SA",        unitCost:8500,  qty:2, minQty:1, location:"EYD-02",      condition:"New",    leadTime:10, criticality:"Critical", status:"Available",   lastAudit:"2025-01-12", notes:"Anti-static storage required" },
+  { id:"SP-010", partNo:"CR-GEN-001",  description:"Generator AVR Module",                    category:"Critical",  type:"Electrical",   equipTag:"GEN-001",  manufacturer:"Stamford",   supplier:"Generator Spares",  unitCost:2800,  qty:2, minQty:1, location:"EYD-02",      condition:"New",    leadTime:6,  criticality:"Critical", status:"Available",   lastAudit:"2025-01-25", notes:"" },
+  { id:"SP-011", partNo:"CR-CONV-002", description:"Conveyor Drive Pulley Bearing (set of 2)", category:"Critical",  type:"Bearing",      equipTag:"CONV-202", manufacturer:"SKF",        supplier:"SKF Direct",        unitCost:960,   qty:4, minQty:2, location:"WHB-03-R04",  condition:"New",    leadTime:3,  criticality:"High",     status:"Available",   lastAudit:"2025-01-20", notes:"" },
+  { id:"SP-012", partNo:"CR-FILT-001", description:"Vacuum Filter Drum Seal Assembly",         category:"Critical",  type:"Seal/Gasket",  equipTag:"FILT-901", manufacturer:"Outotec",    supplier:"Outotec Parts",     unitCost:5600,  qty:2, minQty:1, location:"WHB-02-R01",  condition:"New",    leadTime:10, criticality:"High",     status:"Available",   lastAudit:"2025-01-14", notes:"" },
+
+  // Low stock examples
+  { id:"SP-013", partNo:"CR-PUMP-003", description:"Pump Shaft – Slurry Pump #3",              category:"Critical",  type:"Rotating",     equipTag:"PUMP-305", manufacturer:"Warman",     supplier:"Weir Minerals",     unitCost:6400,  qty:1, minQty:2, location:"WHB-02-R04",  condition:"New",    leadTime:8,  criticality:"Critical", status:"Low Stock",   lastAudit:"2025-01-18", notes:"REORDER REQUIRED" },
+  { id:"SP-014", partNo:"CR-MILL-003", description:"Mill Feed Chute Liner Set",                category:"Critical",  type:"Wear Part",    equipTag:"MILL-701", manufacturer:"Bradken",    supplier:"Bradken Mining",    unitCost:12400, qty:0, minQty:1, location:"—",           condition:"—",      leadTime:10, criticality:"High",     status:"Out of Stock",lastAudit:"2025-01-05", notes:"URGENT – PO raised" },
+];
+
+const SEED_ISSUES = [
+  { id:"ISS-001", spareId:"SP-006", partNo:"CR-CRSH-002", description:"Toggle Plate – Jaw Crusher",      qtyIssued:1, issuedTo:"J. Mbeki",   issuedDate:"2025-01-28", workOrder:"WO-2025-0128", returnDate:null,         returnedBy:null,       status:"Issued",   notes:"Crusher liner replacement" },
+  { id:"ISS-002", spareId:"SP-007", partNo:"CR-PUMP-002", description:"Mechanical Seal Kit",             qtyIssued:1, issuedTo:"C. Nwosu",   issuedDate:"2025-01-20", workOrder:"WO-2025-0120", returnDate:null,         returnedBy:null,       status:"Issued",   notes:"Pump shaft seal replacement" },
+  { id:"ISS-003", spareId:"SP-011", partNo:"CR-CONV-002", description:"Conveyor Drive Pulley Bearing",   qtyIssued:2, issuedTo:"T. Olawale", issuedDate:"2025-01-15", workOrder:"WO-2025-0115", returnDate:"2025-01-16", returnedBy:"T. Olawale",status:"Returned", notes:"Job completed, old bearings returned for disposal" },
+];
+
+const SPARE_TYPES = ["Rotating","Gearbox","Pump","Electrical","Bearing","Seal/Gasket","Wear Part","Fastener","Instrumentation","Hydraulic","Structural","Other"];
+const CATEGORIES  = ["Capital","Critical"];
+const CONDITIONS  = ["New","Reconditioned","Used-Serviceable","Damaged"];
+const STATUSES    = ["Available","Low Stock","Out of Stock","Reserved","In Repair"];
+const CRITICALITIES = ["Critical","High","Medium","Low"];
+
+const today = new Date("2025-02-08");
+const fmt = d => d ? new Date(d).toLocaleDateString("en-ZA",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const statusColor = {
+  "Available":   C.green,
+  "Low Stock":   C.orange,
+  "Out of Stock":C.red,
+  "Reserved":    C.blue,
+  "In Repair":   C.purple,
+};
+const critColor = { Critical:C.red, High:C.orange, Medium:C.blue, Low:C.muted };
+const catColor  = { Capital:C.cyan, Critical:C.accent };
+
+function Badge({ label, color, small }) {
+  return (
+    <span style={{
+      background:color+"1a", color, border:`1px solid ${color}44`,
+      borderRadius:3, padding:small?"2px 7px":"3px 11px",
+      fontSize:small?10:11, fontWeight:700, letterSpacing:"0.05em",
+      textTransform:"uppercase", whiteSpace:"nowrap", display:"inline-block"
+    }}>{label}</span>
+  );
+}
+
+function KPI({ label, value, sub, color, icon, alert }) {
+  return (
+    <div style={{ background:C.card, border:`1px solid ${alert?color:C.border}`,
+      borderRadius:8, padding:"16px 20px", flex:1, minWidth:130,
+      borderTop:`3px solid ${color}`, position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", right:14, top:14, fontSize:22, opacity:0.15 }}>{icon}</div>
+      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>{label}</div>
+      <div style={{ fontSize:30, fontWeight:800, color, fontFamily:"'IBM Plex Mono',monospace", lineHeight:1 }}>{value}</div>
+      {sub && <div style={{ fontSize:11, color:C.light, marginTop:5 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Modal({ title, subtitle, onClose, children, wide }) {
+  return (
+    <div style={{ position:"fixed",inset:0,background:"#00000088",zIndex:1000,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="fade-in" style={{ background:C.card,border:`1px solid ${C.border}`,
+        borderRadius:12,width:"100%",maxWidth:wide?780:620,maxHeight:"92vh",overflowY:"auto" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+          padding:"18px 24px",borderBottom:`1px solid ${C.border}` }}>
+          <div>
+            <div style={{ fontWeight:800,fontSize:15,color:C.text }}>{title}</div>
+            {subtitle && <div style={{ fontSize:11,color:C.muted,marginTop:2 }}>{subtitle}</div>}
+          </div>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:C.muted,
+            cursor:"pointer",fontSize:18,padding:"2px 6px",lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ padding:24 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, type="text", options, required, readOnly, half }) {
+  const s = {
+    background: readOnly ? C.surface+"88" : C.surface,
+    border:`1px solid ${C.border}`, borderRadius:6, color:readOnly?C.muted:C.text,
+    padding:"8px 11px", fontSize:13, width:"100%", outline:"none",
+    fontFamily: type==="number" ? "'IBM Plex Mono',monospace" : "inherit"
+  };
+  return (
+    <div style={{ marginBottom:13 }}>
+      <label style={{ display:"block",fontSize:11,color:C.muted,marginBottom:4,
+        textTransform:"uppercase",letterSpacing:"0.07em" }}>
+        {label}{required&&<span style={{color:C.accent}}> *</span>}
+      </label>
+      {readOnly ? (
+        <div style={{...s,padding:"8px 11px"}}>{value||"—"}</div>
+      ) : options ? (
+        <select value={value||""} onChange={e=>onChange(e.target.value)} style={s}>
+          <option value="">— Select —</option>
+          {options.map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : type==="textarea" ? (
+        <textarea value={value||""} onChange={e=>onChange(e.target.value)} rows={3}
+          style={{...s,resize:"vertical"}} />
+      ) : (
+        <input type={type} value={value||""} onChange={e=>onChange(e.target.value)} style={s} />
+      )}
+    </div>
+  );
+}
+
+function Btn({ children, onClick, color=C.accent, outline, small, disabled, style:ex }) {
+  const [h,setH]=useState(false);
+  return (
+    <button onClick={disabled?undefined:onClick}
+      onMouseEnter={()=>!disabled&&setH(true)} onMouseLeave={()=>setH(false)}
+      style={{ background:disabled?"#1a1e2a":outline?"transparent":h?color+"cc":color,
+        color:disabled?C.muted:outline?color:"#000",
+        border:`1px solid ${disabled?C.border:color}`,
+        borderRadius:6, padding:small?"5px 13px":"8px 18px",
+        fontWeight:700, fontSize:small?11:13, cursor:disabled?"not-allowed":"pointer",
+        letterSpacing:"0.04em", transition:"all 0.12s", ...ex }}>
+      {children}
+    </button>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════════════
+function Dashboard({ spares, issues }) {
+  const totalValue   = spares.reduce((s,p)=>s+p.unitCost*p.qty,0);
+  const capitalValue = spares.filter(p=>p.category==="Capital").reduce((s,p)=>s+p.unitCost*p.qty,0);
+  const lowStock     = spares.filter(p=>p.qty<p.minQty&&p.qty>0).length;
+  const outOfStock   = spares.filter(p=>p.qty===0).length;
+  const activeIssues = issues.filter(i=>i.status==="Issued").length;
+  const longLead     = spares.filter(p=>p.leadTime>=16&&p.category==="Capital").length;
+
+  const byCat = {};
+  spares.forEach(p=>{ byCat[p.category]=(byCat[p.category]||0)+1; });
+
+  const alertSpares = spares.filter(p=>p.qty<=p.minQty);
+
+  const fmtCurrency = n => n>=1000000
+    ? `$${(n/1000000).toFixed(2)}M`
+    : n>=1000 ? `$${(n/1000).toFixed(0)}K` : `$${n}`;
+
+  return (
+    <div className="fade-in">
+      <div style={{ marginBottom:26 }}>
+        <div style={{ fontSize:10,color:C.accent,textTransform:"uppercase",letterSpacing:"0.14em",marginBottom:3 }}>SITE MANAGEMENT SYSTEM</div>
+        <h2 style={{ margin:0,fontSize:22,fontWeight:800,color:C.text }}>Capital & Critical Spares</h2>
+        <div style={{ fontSize:12,color:C.muted,marginTop:4 }}>Inventory Dashboard · {today.toDateString()}</div>
+      </div>
+
+      {/* KPIs */}
+      <div style={{ display:"flex",gap:10,flexWrap:"wrap",marginBottom:20 }}>
+        <KPI label="Total Inventory Value" value={fmtCurrency(totalValue)}  color={C.accent} icon="💰" sub={`Capital: ${fmtCurrency(capitalValue)}`} />
+        <KPI label="Total Part Numbers"    value={spares.length}            color={C.cyan}   icon="🔩" sub={`${byCat.Capital||0} capital · ${byCat.Critical||0} critical`} />
+        <KPI label="Low / Out of Stock"    value={`${lowStock+outOfStock}`} color={lowStock+outOfStock>0?C.red:C.green} icon="⚠️" alert={lowStock+outOfStock>0} sub={`${outOfStock} zero stock`} />
+        <KPI label="Active Issues"         value={activeIssues}             color={C.blue}   icon="📤" sub="Parts currently issued" />
+        <KPI label="Long Lead Items"       value={longLead}                 color={C.purple} icon="⏳" sub="≥16 week lead time" />
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14 }}>
+        {/* Alerts panel */}
+        <div style={{ background:C.card,border:`1px solid ${alertSpares.length>0?C.red+"44":C.border}`,borderRadius:10,padding:20 }}>
+          <div style={{ fontWeight:700,fontSize:13,color:alertSpares.length>0?C.red:C.text,marginBottom:14,display:"flex",alignItems:"center",gap:8 }}>
+            {alertSpares.length>0?"⚠️ Stock Alerts":"✅ Stock Status"} <Badge label={`${alertSpares.length} items`} color={alertSpares.length>0?C.red:C.green} small />
+          </div>
+          {alertSpares.length===0
+            ? <div style={{fontSize:13,color:C.green}}>All items above minimum stock levels</div>
+            : alertSpares.map(p=>(
+              <div key={p.id} style={{ padding:"10px 0",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"monospace"}}>{p.partNo}</div>
+                  <div style={{fontSize:11,color:C.muted}}>{p.description}</div>
+                  <div style={{fontSize:10,color:C.light,marginTop:2}}>Lead time: <span style={{color:C.orange}}>{p.leadTime}w</span></div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <Badge label={p.status} color={statusColor[p.status]||C.muted} small />
+                  <div style={{fontSize:11,color:C.muted,marginTop:4}}>
+                    Qty: <span style={{color:p.qty===0?C.red:C.orange,fontWeight:700}}>{p.qty}</span> / Min: {p.minQty}
+                  </div>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+
+        {/* Value by category */}
+        <div style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:20 }}>
+          <div style={{ fontWeight:700,fontSize:13,color:C.text,marginBottom:16 }}>Inventory Breakdown</div>
+          {["Capital","Critical"].map(cat=>{
+            const items = spares.filter(p=>p.category===cat);
+            const val   = items.reduce((s,p)=>s+p.unitCost*p.qty,0);
+            const pct   = totalValue>0?(val/totalValue)*100:0;
+            return (
+              <div key={cat} style={{marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <Badge label={cat} color={catColor[cat]} small />
+                    <span style={{fontSize:12,color:C.light}}>{items.length} items</span>
+                  </div>
+                  <span style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"monospace"}}>{fmtCurrency(val)}</span>
+                </div>
+                <div style={{height:8,background:C.border,borderRadius:4,overflow:"hidden"}}>
+                  <div style={{width:`${pct}%`,height:"100%",background:catColor[cat],borderRadius:4,transition:"width 0.5s"}}/>
+                </div>
+              </div>
+            );
+          })}
+
+          <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14,marginTop:4}}>
+            <div style={{fontSize:12,color:C.muted,marginBottom:10}}>By Spare Type</div>
+            {Object.entries(
+              spares.reduce((acc,p)=>{ acc[p.type]=(acc[p.type]||0)+1; return acc; },{})
+            ).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,n])=>(
+              <div key={t} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                <span style={{fontSize:12,color:C.light}}>{t}</span>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:60,height:4,background:C.border,borderRadius:2}}>
+                    <div style={{width:`${(n/spares.length)*100}%`,height:"100%",background:C.accent,borderRadius:2}}/>
+                  </div>
+                  <span style={{fontSize:12,color:C.text,minWidth:16,textAlign:"right"}}>{n}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent issues */}
+      <div style={{ background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:20 }}>
+        <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:14}}>Recent Issues / Transactions</div>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{borderBottom:`1px solid ${C.border}`}}>
+              {["Issue ID","Part No","Description","Qty","Issued To","Work Order","Date","Status"].map(h=>(
+                <th key={h} style={{textAlign:"left",padding:"6px 10px",fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {issues.slice().reverse().slice(0,6).map((iss,i)=>(
+              <tr key={iss.id} style={{borderBottom:`1px solid ${C.border}22`}}>
+                <td style={{padding:"8px 10px",fontSize:11,color:C.accent,fontFamily:"monospace"}}>{iss.id}</td>
+                <td style={{padding:"8px 10px",fontSize:11,color:C.cyan,fontFamily:"monospace"}}>{iss.partNo}</td>
+                <td style={{padding:"8px 10px",fontSize:11,color:C.light}}>{iss.description}</td>
+                <td style={{padding:"8px 10px",fontSize:12,fontWeight:700,color:C.text,fontFamily:"monospace"}}>{iss.qtyIssued}</td>
+                <td style={{padding:"8px 10px",fontSize:11,color:C.light}}>{iss.issuedTo}</td>
+                <td style={{padding:"8px 10px",fontSize:11,color:C.muted,fontFamily:"monospace"}}>{iss.workOrder}</td>
+                <td style={{padding:"8px 10px",fontSize:11,color:C.light}}>{fmt(iss.issuedDate)}</td>
+                <td style={{padding:"8px 10px"}}><Badge label={iss.status} color={iss.status==="Issued"?C.blue:C.green} small /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SPARES REGISTER
+// ══════════════════════════════════════════════════════════════════════════
+function SparesRegister({ spares, setSpares }) {
+  const [search,  setSearch]  = useState("");
+  const [catF,    setCatF]    = useState("All");
+  const [statF,   setStatF]   = useState("All");
+  const [critF,   setCritF]   = useState("All");
+  const [modal,   setModal]   = useState(false);
+  const [sel,     setSel]     = useState(null);
+  const [detail,  setDetail]  = useState(null);
+
+  const blank = { partNo:"",description:"",category:"Critical",type:"Rotating",equipTag:"",
+    manufacturer:"",supplier:"",unitCost:"",qty:"",minQty:"",location:"",
+    condition:"New",leadTime:"",criticality:"Critical",status:"Available",notes:"" };
+  const [form, setForm] = useState(blank);
+
+  const filtered = useMemo(()=>spares.filter(p=>{
+    const q=search.toLowerCase();
+    const mQ=!q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q)
+      ||p.equipTag.toLowerCase().includes(q)||p.manufacturer.toLowerCase().includes(q);
+    return mQ && (catF==="All"||p.category===catF)
+               && (statF==="All"||p.status===statF)
+               && (critF==="All"||p.criticality===critF);
+  }),[spares,search,catF,statF,critF]);
+
+  const openAdd  = () => { setForm(blank); setSel(null); setModal(true); };
+  const openEdit = p  => { setForm({...p,unitCost:String(p.unitCost),qty:String(p.qty),minQty:String(p.minQty),leadTime:String(p.leadTime)}); setSel(p.id); setModal(true); };
+
+  const save = () => {
+    if (!form.partNo||!form.description) return alert("Part No and Description required.");
+    const rec = {...form, unitCost:parseFloat(form.unitCost)||0, qty:parseInt(form.qty)||0,
+      minQty:parseInt(form.minQty)||0, leadTime:parseInt(form.leadTime)||0 };
+    // Auto-set status based on qty
+    if (rec.qty===0) rec.status="Out of Stock";
+    else if (rec.qty<rec.minQty) rec.status="Low Stock";
+    else if (rec.status==="Out of Stock"||rec.status==="Low Stock") rec.status="Available";
+
+    if (sel) {
+      setSpares(s=>s.map(p=>p.id===sel?{...p,...rec}:p));
+    } else {
+      const id="SP-"+String(spares.length+1).padStart(3,"0");
+      setSpares(s=>[...s,{...rec,id,lastAudit:today.toISOString().split("T")[0]}]);
+    }
+    setModal(false);
+  };
+
+  const f=(k,label,opts,type)=><Field label={label} value={form[k]} onChange={v=>setForm(p=>({...p,[k]:v}))} options={opts} type={type} />;
+
+  const totalVal = filtered.reduce((s,p)=>s+p.unitCost*p.qty,0);
+  const fmtC = n => n>=1000000?`$${(n/1000000).toFixed(2)}M`:n>=1000?`$${(n/1000).toFixed(0)}K`:`$${n.toLocaleString()}`;
+
+  return (
+    <div className="fade-in">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+        <div>
+          <div style={{fontSize:10,color:C.accent,textTransform:"uppercase",letterSpacing:"0.12em"}}>SPARES MODULE</div>
+          <h2 style={{margin:"2px 0 0",fontSize:20,fontWeight:800,color:C.text}}>Spares Register</h2>
+          <div style={{fontSize:11,color:C.muted,marginTop:3}}>{filtered.length} items · Total value: <span style={{color:C.accent,fontFamily:"monospace"}}>{fmtC(totalVal)}</span></div>
+        </div>
+        <Btn onClick={openAdd}>+ Add Spare</Btn>
+      </div>
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+        <input placeholder="🔍  Part No, description, equipment tag…" value={search} onChange={e=>setSearch(e.target.value)}
+          style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,
+            padding:"7px 12px",fontSize:13,flex:1,minWidth:220,outline:"none"}}/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {["All","Capital","Critical"].map(c=>(
+            <button key={c} onClick={()=>setCatF(c)}
+              style={{background:catF===c?(catColor[c]||C.accent):"transparent",
+                color:catF===c?"#000":C.muted,border:`1px solid ${catF===c?(catColor[c]||C.accent):C.border}`,
+                borderRadius:5,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer",
+                textTransform:"uppercase",letterSpacing:"0.05em"}}>{c}</button>
+          ))}
+        </div>
+        <select value={statF} onChange={e=>setStatF(e.target.value)}
+          style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,padding:"6px 10px",fontSize:12}}>
+          {["All",...STATUSES].map(s=><option key={s}>{s}</option>)}
+        </select>
+        <select value={critF} onChange={e=>setCritF(e.target.value)}
+          style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,padding:"6px 10px",fontSize:12}}>
+          {["All",...CRITICALITIES].map(s=><option key={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Table */}
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
+          <thead>
+            <tr style={{background:C.surface}}>
+              {["Part No","Description","Cat","Type","Equip Tag","Manufacturer","Unit Cost","Qty","Min","Location","Lead (wks)","Crit","Status",""].map(h=>(
+                <th key={h} style={{textAlign:"left",padding:"9px 11px",fontSize:10,color:C.muted,
+                  textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((p,i)=>(
+              <tr key={p.id} style={{background:i%2===0?"transparent":C.surface+"33",
+                borderBottom:`1px solid ${C.border}18`,
+                outline: p.qty<p.minQty?`1px solid ${C.red}18`:"none"}}>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.cyan,fontFamily:"monospace",fontWeight:600,whiteSpace:"nowrap"}}>{p.partNo}</td>
+                <td style={{padding:"8px 11px",fontSize:12,color:C.text,maxWidth:220}}>{p.description}</td>
+                <td style={{padding:"8px 11px"}}><Badge label={p.category} color={catColor[p.category]} small /></td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.light,whiteSpace:"nowrap"}}>{p.type}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.accent,fontFamily:"monospace"}}>{p.equipTag}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.muted}}>{p.manufacturer}</td>
+                <td style={{padding:"8px 11px",fontSize:12,color:C.text,fontFamily:"monospace",whiteSpace:"nowrap"}}>${p.unitCost.toLocaleString()}</td>
+                <td style={{padding:"8px 11px",fontSize:13,fontWeight:800,
+                  color:p.qty===0?C.red:p.qty<p.minQty?C.orange:C.green,fontFamily:"monospace",textAlign:"center"}}>{p.qty}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.muted,textAlign:"center"}}>{p.minQty}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.muted,fontFamily:"monospace"}}>{p.location}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:p.leadTime>=16?C.orange:C.light,textAlign:"center",fontWeight:p.leadTime>=16?700:400}}>{p.leadTime}</td>
+                <td style={{padding:"8px 11px"}}><Badge label={p.criticality} color={critColor[p.criticality]} small /></td>
+                <td style={{padding:"8px 11px"}}><Badge label={p.status} color={statusColor[p.status]||C.muted} small /></td>
+                <td style={{padding:"8px 11px"}}>
+                  <div style={{display:"flex",gap:5}}>
+                    <Btn onClick={()=>setDetail(p)} outline small color={C.cyan}>View</Btn>
+                    <Btn onClick={()=>openEdit(p)} outline small color={C.accent}>Edit</Btn>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length===0&&<div style={{padding:32,textAlign:"center",color:C.muted}}>No spares match current filters.</div>}
+      </div>
+
+      {/* Add/Edit Modal */}
+      {modal && (
+        <Modal title={sel?"Edit Spare Part":"Add New Spare Part"}
+          subtitle={sel?`Editing: ${form.partNo}`:"New entry to spares register"}
+          onClose={()=>setModal(false)} wide>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 20px"}}>
+            <div>{f("partNo","Part Number",null)}</div>
+            <div>{f("category","Category",CATEGORIES)}</div>
+            <div style={{gridColumn:"1/-1"}}>{f("description","Description",null)}</div>
+            <div>{f("type","Spare Type",SPARE_TYPES)}</div>
+            <div>{f("equipTag","Equipment Tag",null)}</div>
+            <div>{f("manufacturer","Manufacturer",null)}</div>
+            <div>{f("supplier","Supplier",null)}</div>
+            <div>{f("unitCost","Unit Cost (USD)","","number")}</div>
+            <div>{f("qty","Qty on Hand","","number")}</div>
+            <div>{f("minQty","Minimum Qty","","number")}</div>
+            <div>{f("location","Warehouse Location",null)}</div>
+            <div>{f("leadTime","Lead Time (weeks)","","number")}</div>
+            <div>{f("condition","Condition",CONDITIONS)}</div>
+            <div>{f("criticality","Criticality",CRITICALITIES)}</div>
+            <div>{f("status","Status",STATUSES)}</div>
+            <div style={{gridColumn:"1/-1"}}>{f("notes","Notes",null,"textarea")}</div>
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+            <Btn onClick={()=>setModal(false)} outline color={C.muted}>Cancel</Btn>
+            <Btn onClick={save}>Save Spare</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Detail View Modal */}
+      {detail && (
+        <Modal title={detail.partNo} subtitle={detail.description} onClose={()=>setDetail(null)} wide>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
+            {[
+              ["Category",     <Badge label={detail.category} color={catColor[detail.category]} />],
+              ["Status",       <Badge label={detail.status}   color={statusColor[detail.status]||C.muted} />],
+              ["Criticality",  <Badge label={detail.criticality} color={critColor[detail.criticality]} />],
+              ["Qty on Hand",  <span style={{fontSize:22,fontWeight:800,color:detail.qty===0?C.red:detail.qty<detail.minQty?C.orange:C.green,fontFamily:"monospace"}}>{detail.qty}</span>],
+              ["Min Qty",      <span style={{fontFamily:"monospace",color:C.text}}>{detail.minQty}</span>],
+              ["Unit Cost",    <span style={{fontFamily:"monospace",color:C.accent}}>${detail.unitCost.toLocaleString()}</span>],
+              ["Total Value",  <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>${(detail.unitCost*detail.qty).toLocaleString()}</span>],
+              ["Lead Time",    <span style={{color:detail.leadTime>=16?C.orange:C.light,fontFamily:"monospace"}}>{detail.leadTime} weeks</span>],
+              ["Last Audit",   <span style={{color:C.light}}>{fmt(detail.lastAudit)}</span>],
+            ].map(([l,v])=>(
+              <div key={l} style={{background:C.surface,borderRadius:8,padding:"12px 14px",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>{l}</div>
+                <div>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {[
+              ["Equipment Tag",  detail.equipTag],
+              ["Spare Type",     detail.type],
+              ["Manufacturer",   detail.manufacturer],
+              ["Supplier",       detail.supplier],
+              ["Warehouse Loc.", detail.location],
+              ["Condition",      detail.condition],
+            ].map(([l,v])=>(
+              <div key={l} style={{display:"flex",gap:8}}>
+                <span style={{fontSize:11,color:C.muted,minWidth:110}}>{l}:</span>
+                <span style={{fontSize:12,color:C.text,fontWeight:500}}>{v||"—"}</span>
+              </div>
+            ))}
+          </div>
+          {detail.notes && (
+            <div style={{marginTop:16,padding:14,background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Notes</div>
+              <div style={{fontSize:12,color:C.light}}>{detail.notes}</div>
+            </div>
+          )}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:18}}>
+            <Btn onClick={()=>{setDetail(null);openEdit(detail);}} outline color={C.accent}>Edit This Spare</Btn>
+            <Btn onClick={()=>setDetail(null)} color={C.cyan} outline>Close</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ISSUE / RETURN
+// ══════════════════════════════════════════════════════════════════════════
+function IssueReturn({ spares, setSpares, issues, setIssues }) {
+  const [modal,  setModal]  = useState(false);
+  const [retMod, setRetMod] = useState(null);
+  const [retBy,  setRetBy]  = useState("");
+  const [filterStat, setFilterStat] = useState("All");
+  const blank = { spareId:"", partNo:"", description:"", qtyIssued:"1",
+    issuedTo:"", issuedDate:today.toISOString().split("T")[0],
+    workOrder:"", notes:"" };
+  const [form, setForm] = useState(blank);
+
+  const filtered = issues.filter(i=>filterStat==="All"||i.status===filterStat);
+
+  const issueSpare = () => {
+    const sp = spares.find(p=>p.id===form.spareId);
+    if (!sp) return alert("Select a spare part.");
+    const qty = parseInt(form.qtyIssued)||1;
+    if (qty>sp.qty) return alert(`Only ${sp.qty} available.`);
+    if (!form.issuedTo) return alert("Issued To is required.");
+
+    // Update spare qty
+    const newQty = sp.qty - qty;
+    setSpares(s=>s.map(p=>p.id===sp.id?{...p, qty:newQty,
+      status: newQty===0?"Out of Stock":newQty<p.minQty?"Low Stock":p.status==="Out of Stock"||p.status==="Low Stock"?"Available":p.status
+    }:p));
+
+    const id = "ISS-"+String(issues.length+1).padStart(3,"0");
+    setIssues(i=>[...i,{...form,id,qtyIssued:qty,partNo:sp.partNo,description:sp.description,status:"Issued",returnDate:null,returnedBy:null}]);
+    setModal(false);
+  };
+
+  const openReturn = iss => { setRetMod(iss); setRetBy(""); };
+  const confirmReturn = () => {
+    if (!retBy) return alert("Enter name for return.");
+    // Add qty back
+    const sp = spares.find(p=>p.id===retMod.spareId);
+    if (sp) {
+      const newQty = sp.qty + retMod.qtyIssued;
+      setSpares(s=>s.map(p=>p.id===sp.id?{...p, qty:newQty,
+        status: newQty<p.minQty?"Low Stock":"Available"
+      }:p));
+    }
+    setIssues(i=>i.map(x=>x.id===retMod.id?{...x,status:"Returned",returnDate:today.toISOString().split("T")[0],returnedBy:retBy}:x));
+    setRetMod(null);
+  };
+
+  const f=(k,label,opts,type)=><Field label={label} value={form[k]} onChange={v=>setForm(p=>({...p,[k]:v}))} options={opts} type={type} />;
+
+  return (
+    <div className="fade-in">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+        <div>
+          <div style={{fontSize:10,color:C.accent,textTransform:"uppercase",letterSpacing:"0.12em"}}>SPARES MODULE</div>
+          <h2 style={{margin:"2px 0 0",fontSize:20,fontWeight:800,color:C.text}}>Issue & Return Register</h2>
+        </div>
+        <Btn onClick={()=>{setForm(blank);setModal(true);}}>📤 Issue Spare</Btn>
+      </div>
+
+      {/* Summary */}
+      <div style={{display:"flex",gap:10,marginBottom:18}}>
+        {[["Currently Issued",issues.filter(i=>i.status==="Issued").length,C.blue],
+          ["Returned",        issues.filter(i=>i.status==="Returned").length,C.green],
+          ["Total Transactions",issues.length,C.accent]].map(([l,v,col])=>(
+          <div key={l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,
+            padding:"12px 18px",flex:1,borderLeft:`4px solid ${col}`}}>
+            <div style={{fontSize:24,fontWeight:800,color:col,fontFamily:"monospace"}}>{v}</div>
+            <div style={{fontSize:11,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em"}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter */}
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        {["All","Issued","Returned"].map(s=>(
+          <button key={s} onClick={()=>setFilterStat(s)}
+            style={{background:filterStat===s?(s==="Issued"?C.blue:s==="Returned"?C.green:C.accent):"transparent",
+              color:filterStat===s?"#000":C.muted,
+              border:`1px solid ${filterStat===s?(s==="Issued"?C.blue:s==="Returned"?C.green:C.accent):C.border}`,
+              borderRadius:5,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",
+              textTransform:"uppercase",letterSpacing:"0.05em"}}>{s}</button>
+        ))}
+      </div>
+
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:800}}>
+          <thead>
+            <tr style={{background:C.surface}}>
+              {["Issue ID","Part No","Description","Qty","Issued To","Work Order","Date Issued","Status","Date Returned","Returned By","Action"].map(h=>(
+                <th key={h} style={{textAlign:"left",padding:"9px 11px",fontSize:10,color:C.muted,
+                  textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.slice().reverse().map((iss,i)=>(
+              <tr key={iss.id} style={{background:i%2===0?"transparent":C.surface+"33",borderBottom:`1px solid ${C.border}18`}}>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.accent,fontFamily:"monospace"}}>{iss.id}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.cyan,fontFamily:"monospace",whiteSpace:"nowrap"}}>{iss.partNo}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.text,maxWidth:200}}>{iss.description}</td>
+                <td style={{padding:"8px 11px",fontSize:12,fontWeight:800,color:C.text,fontFamily:"monospace",textAlign:"center"}}>{iss.qtyIssued}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.light}}>{iss.issuedTo}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.muted,fontFamily:"monospace"}}>{iss.workOrder||"—"}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.light,whiteSpace:"nowrap"}}>{fmt(iss.issuedDate)}</td>
+                <td style={{padding:"8px 11px"}}><Badge label={iss.status} color={iss.status==="Issued"?C.blue:C.green} small /></td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.light,whiteSpace:"nowrap"}}>{fmt(iss.returnDate)}</td>
+                <td style={{padding:"8px 11px",fontSize:11,color:C.light}}>{iss.returnedBy||"—"}</td>
+                <td style={{padding:"8px 11px"}}>
+                  {iss.status==="Issued"&&<Btn onClick={()=>openReturn(iss)} small color={C.green}>Return</Btn>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length===0&&<div style={{padding:32,textAlign:"center",color:C.muted}}>No transactions found.</div>}
+      </div>
+
+      {/* Issue Modal */}
+      {modal && (
+        <Modal title="Issue Spare Part" subtitle="Record a spare part leaving the warehouse" onClose={()=>setModal(false)}>
+          <div>
+            <div style={{marginBottom:13}}>
+              <label style={{display:"block",fontSize:11,color:C.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                Select Spare Part <span style={{color:C.accent}}>*</span>
+              </label>
+              <select value={form.spareId} onChange={e=>{
+                const sp=spares.find(p=>p.id===e.target.value);
+                setForm(f=>({...f,spareId:e.target.value,partNo:sp?.partNo||""}));
+              }} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,
+                padding:"8px 11px",fontSize:13,width:"100%",outline:"none"}}>
+                <option value="">— Select —</option>
+                {spares.filter(p=>p.qty>0).map(p=>(
+                  <option key={p.id} value={p.id}>{p.partNo} – {p.description} (Qty: {p.qty})</option>
+                ))}
+              </select>
+            </div>
+            {form.spareId && (()=>{
+              const sp=spares.find(p=>p.id===form.spareId);
+              return sp ? (
+                <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:14,fontSize:12}}>
+                  <span style={{color:C.muted}}>Available: </span>
+                  <span style={{color:sp.qty<sp.minQty?C.orange:C.green,fontWeight:700,fontFamily:"monospace"}}>{sp.qty}</span>
+                  <span style={{color:C.muted,marginLeft:16}}>Location: </span>
+                  <span style={{color:C.text,fontFamily:"monospace"}}>{sp.location}</span>
+                </div>
+              ) : null;
+            })()}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+              <div>{f("qtyIssued","Quantity to Issue",null,"number")}</div>
+              <div>{f("issuedDate","Date Issued",null,"date")}</div>
+              <div>{f("issuedTo","Issued To (Name)",null)}</div>
+              <div>{f("workOrder","Work Order / Reference",null)}</div>
+            </div>
+            {f("notes","Notes",null,"textarea")}
+          </div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:6}}>
+            <Btn onClick={()=>setModal(false)} outline color={C.muted}>Cancel</Btn>
+            <Btn onClick={issueSpare} color={C.blue}>📤 Confirm Issue</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* Return Modal */}
+      {retMod && (
+        <Modal title="Return Spare Part" subtitle={`${retMod.partNo} – ${retMod.description}`} onClose={()=>setRetMod(null)}>
+          <div style={{padding:"12px 16px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:18}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,fontSize:12}}>
+              <div><span style={{color:C.muted}}>Issued To:</span> <span style={{color:C.text}}>{retMod.issuedTo}</span></div>
+              <div><span style={{color:C.muted}}>Qty Issued:</span> <span style={{color:C.text,fontFamily:"monospace",fontWeight:700}}>{retMod.qtyIssued}</span></div>
+              <div><span style={{color:C.muted}}>Work Order:</span> <span style={{color:C.text,fontFamily:"monospace"}}>{retMod.workOrder||"—"}</span></div>
+              <div><span style={{color:C.muted}}>Issue Date:</span> <span style={{color:C.text}}>{fmt(retMod.issuedDate)}</span></div>
+            </div>
+          </div>
+          <Field label="Returned By (Name)" value={retBy} onChange={setRetBy} required />
+          <div style={{fontSize:11,color:C.muted,marginBottom:18}}>Return date: <span style={{color:C.text,fontFamily:"monospace"}}>{today.toISOString().split("T")[0]}</span> · Qty will be added back to stock.</div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <Btn onClick={()=>setRetMod(null)} outline color={C.muted}>Cancel</Btn>
+            <Btn onClick={confirmReturn} color={C.green}>✓ Confirm Return</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// AUDIT TRAIL
+// ══════════════════════════════════════════════════════════════════════════
+function AuditTrail({ spares, setSpares }) {
+  const [auditModal, setAuditModal] = useState(null);
+  const [auditName,  setAuditName]  = useState("");
+  const [auditNotes, setAuditNotes] = useState("");
+  const [search, setSearch] = useState("");
+
+  const dueForAudit = spares.filter(p=>{
+    if (!p.lastAudit) return true;
+    const d = new Date(p.lastAudit);
+    const months = (today - d)/(1000*60*60*24*30);
+    return months >= 6;
+  });
+
+  const filtered = spares.filter(p=>{
+    const q=search.toLowerCase();
+    return !q||p.partNo.toLowerCase().includes(q)||p.description.toLowerCase().includes(q);
+  });
+
+  const confirmAudit = () => {
+    if (!auditName) return alert("Enter auditor name.");
+    setSpares(s=>s.map(p=>p.id===auditModal.id
+      ?{...p,lastAudit:today.toISOString().split("T")[0],notes:auditNotes||p.notes}:p));
+    setAuditModal(null);
+  };
+
+  const auditAge = p => {
+    if (!p.lastAudit) return 999;
+    return Math.floor((today-new Date(p.lastAudit))/(1000*60*60*24*30));
+  };
+
+  return (
+    <div className="fade-in">
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:10,color:C.accent,textTransform:"uppercase",letterSpacing:"0.12em"}}>SPARES MODULE</div>
+        <h2 style={{margin:"2px 0 0",fontSize:20,fontWeight:800,color:C.text}}>Physical Audit Trail</h2>
+        <div style={{fontSize:11,color:C.muted,marginTop:3}}>Record physical stock checks and condition assessments</div>
+      </div>
+
+      {/* Due for audit banner */}
+      {dueForAudit.length>0 && (
+        <div style={{background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:10,
+          padding:"14px 18px",marginBottom:18,display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:20}}>📋</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:C.orange}}>{dueForAudit.length} items overdue for physical audit (6+ months)</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:2}}>Review and confirm stock quantities and condition below</div>
+          </div>
+        </div>
+      )}
+
+      <input placeholder="🔍  Search part…" value={search} onChange={e=>setSearch(e.target.value)}
+        style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,
+          padding:"7px 12px",fontSize:13,width:"100%",outline:"none",marginBottom:14}}/>
+
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
+          <thead>
+            <tr style={{background:C.surface}}>
+              {["Part No","Description","Location","Qty","Condition","Last Audit","Audit Age","Action"].map(h=>(
+                <th key={h} style={{textAlign:"left",padding:"9px 11px",fontSize:10,color:C.muted,
+                  textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.sort((a,b)=>auditAge(b)-auditAge(a)).map((p,i)=>{
+              const age = auditAge(p);
+              return (
+                <tr key={p.id} style={{background:i%2===0?"transparent":C.surface+"33",borderBottom:`1px solid ${C.border}18`}}>
+                  <td style={{padding:"8px 11px",fontSize:11,color:C.cyan,fontFamily:"monospace"}}>{p.partNo}</td>
+                  <td style={{padding:"8px 11px",fontSize:12,color:C.text}}>{p.description}</td>
+                  <td style={{padding:"8px 11px",fontSize:11,color:C.muted,fontFamily:"monospace"}}>{p.location}</td>
+                  <td style={{padding:"8px 11px",fontSize:13,fontWeight:800,color:p.qty===0?C.red:p.qty<p.minQty?C.orange:C.green,fontFamily:"monospace",textAlign:"center"}}>{p.qty}</td>
+                  <td style={{padding:"8px 11px"}}><Badge label={p.condition} color={p.condition==="New"?C.green:p.condition==="Damaged"?C.red:C.orange} small /></td>
+                  <td style={{padding:"8px 11px",fontSize:11,color:C.light,whiteSpace:"nowrap"}}>{fmt(p.lastAudit)}</td>
+                  <td style={{padding:"8px 11px"}}>
+                    <span style={{fontSize:11,fontWeight:700,color:age>=6?C.red:age>=3?C.orange:C.green}}>
+                      {age===999?"Never":age===0?"This month":`${age}mo ago`}
+                    </span>
+                  </td>
+                  <td style={{padding:"8px 11px"}}>
+                    <Btn onClick={()=>{setAuditModal(p);setAuditName("");setAuditNotes(p.notes||"");}}
+                      small color={age>=6?C.orange:C.cyan} outline>Audit</Btn>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {auditModal && (
+        <Modal title="Record Physical Audit" subtitle={`${auditModal.partNo} – ${auditModal.description}`} onClose={()=>setAuditModal(null)}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:18,padding:"14px 16px",
+            background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div><span style={{fontSize:11,color:C.muted}}>Location:</span> <span style={{fontSize:12,color:C.text,fontFamily:"monospace"}}>{auditModal.location}</span></div>
+            <div><span style={{fontSize:11,color:C.muted}}>Current Qty:</span> <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"monospace"}}>{auditModal.qty}</span></div>
+            <div><span style={{fontSize:11,color:C.muted}}>Last Audit:</span> <span style={{fontSize:12,color:C.light}}>{fmt(auditModal.lastAudit)}</span></div>
+            <div><span style={{fontSize:11,color:C.muted}}>Condition:</span> <span style={{fontSize:12,color:C.text}}>{auditModal.condition}</span></div>
+          </div>
+          <Field label="Auditor Name" value={auditName} onChange={setAuditName} required />
+          <Field label="Audit Notes / Observations" value={auditNotes} onChange={setAuditNotes} type="textarea" />
+          <div style={{fontSize:11,color:C.muted,marginBottom:18}}>Audit date: <span style={{color:C.text,fontFamily:"monospace"}}>{today.toISOString().split("T")[0]}</span></div>
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <Btn onClick={()=>setAuditModal(null)} outline color={C.muted}>Cancel</Btn>
+            <Btn onClick={confirmAudit} color={C.cyan}>✓ Record Audit</Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ROOT APP
+// ══════════════════════════════════════════════════════════════════════════
+const NAV = [
+  { id:"dashboard", label:"Dashboard",    icon:"📊" },
+  { id:"register",  label:"Spares Register", icon:"🔩" },
+  { id:"issue",     label:"Issue & Return",  icon:"📤" },
+  { id:"audit",     label:"Audit Trail",     icon:"📋" },
+];
+
+function App() {
+  const [tab,     setTab]     = useState("dashboard");
+  const [spares,  setSpares]  = useState(SEED_SPARES);
+  const [issues,  setIssues]  = useState(SEED_ISSUES);
+
+  const alerts = spares.filter(p=>p.qty<p.minQty).length;
+  const activeIssues = issues.filter(i=>i.status==="Issued").length;
+
+  return (
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,display:"flex",
+      fontFamily:"'IBM Plex Sans','Segoe UI',sans-serif"}}>
+
+      {/* Sidebar */}
+      <div style={{width:230,background:C.surface,borderRight:`1px solid ${C.border}`,
+        display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:10}}>
+
+        {/* Logo */}
+        <div style={{padding:"22px 18px 16px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{fontSize:9,color:C.accent,textTransform:"uppercase",letterSpacing:"0.16em",marginBottom:3}}>SITE MANAGEMENT SYSTEM</div>
+          <div style={{fontSize:15,fontWeight:900,color:C.text,lineHeight:1.25,letterSpacing:"-0.02em"}}>CAPITAL &<br/>CRITICAL SPARES</div>
+          <div style={{marginTop:8,display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:C.green}} className="pulse"/>
+            <span style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em"}}>Mining / Heavy Industry</span>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav style={{flex:1,padding:"10px 0"}}>
+          {NAV.map(n=>{
+            const badge = n.id==="register"&&alerts>0 ? alerts
+                        : n.id==="issue"&&activeIssues>0 ? activeIssues : 0;
+            return (
+              <button key={n.id} onClick={()=>setTab(n.id)}
+                style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"11px 18px",
+                  background:tab===n.id?C.accent+"1a":"transparent",
+                  color:tab===n.id?C.accent:C.light,
+                  border:"none",cursor:"pointer",textAlign:"left",fontSize:13,
+                  fontWeight:tab===n.id?700:400,
+                  borderLeft:tab===n.id?`3px solid ${C.accent}`:"3px solid transparent",
+                  transition:"all 0.12s"}}>
+                <span style={{fontSize:15}}>{n.icon}</span>
+                <span style={{flex:1}}>{n.label}</span>
+                {badge>0&&(
+                  <span style={{background:n.id==="register"?C.red:C.blue,color:"#fff",
+                    borderRadius:10,fontSize:9,fontWeight:800,padding:"1px 6px",minWidth:18,textAlign:"center"}}>
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Stock summary */}
+        <div style={{padding:"14px 18px",borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Quick Stats</div>
+          {[
+            ["Total Parts",    spares.length,           C.text],
+            ["Low / No Stock", spares.filter(p=>p.qty<p.minQty).length, C.red],
+            ["Issued Out",     activeIssues,            C.blue],
+          ].map(([l,v,col])=>(
+            <div key={l} style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:11,color:C.muted}}>{l}</span>
+              <span style={{fontSize:11,fontWeight:700,color:col,fontFamily:"monospace"}}>{v}</span>
+            </div>
+          ))}
+          <div style={{marginTop:10,fontSize:9,color:C.accentLo}}>v1.0 · Spares Module</div>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{flex:1,marginLeft:230,padding:"30px 30px 60px"}}>
+        {tab==="dashboard" && <Dashboard spares={spares} issues={issues} />}
+        {tab==="register"  && <SparesRegister spares={spares} setSpares={setSpares} />}
+        {tab==="issue"     && <IssueReturn spares={spares} setSpares={setSpares} issues={issues} setIssues={setIssues} />}
+        {tab==="audit"     && <AuditTrail spares={spares} setSpares={setSpares} />}
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
